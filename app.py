@@ -157,14 +157,20 @@ def main():
                 message_placeholder = st.empty()
                 with st.spinner("Thinking..."):
                     try:
-                        retriever = st.session_state.vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 8})
+                        retriever = st.session_state.vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 20})
                         
-                        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+                        llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
                         
                         template = """
-                        You are a helpful assistant.
-                        Answer ONLY from the provided transcript context.
-                        If the context is insufficient, just say you don't know.
+                        You are a helpful and intelligent assistant.
+                        Your primary source of information is the provided transcript context from a YouTube video.
+                        
+                        Instructions:
+                        1. Answer the question based on the Context provided below.
+                        2. If the answer is NOT in the Context, you may use your general knowledge to answer, but you MUST mention that this information is not from the video.
+                        3. Keep your language simple, clear, and easy to understand for a general audience.
+                        4. Do not hallucinate. If you don't know the answer and it's not in the context or general knowledge, say you don't know.
+                        5. be concise and to the point.
                         
                         Context:
                         {context}
