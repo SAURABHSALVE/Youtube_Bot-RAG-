@@ -7,6 +7,9 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Setup page config
 st.set_page_config(
@@ -63,16 +66,28 @@ def main():
         st.header("⚙️ Configuration")
         
         # API Key Input
-        api_key = st.text_input("OpenAI API Key", type="password", help="Enter your OpenAI API key here.")
-        if api_key:
-            os.environ["OPENAI_API_KEY"] = api_key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            st.error("⚠️ OPENAI_API_KEY not found in .env file.")
         
         # Language Selection
-        language_code = st.text_input(
-            "Language Code", 
-            value="en",
-            help="e.g., 'en' for English, 'es' for Spanish, 'hi' for Hindi"
+        languages = {
+            "English": "en",
+            "Hindi": "hi",
+            "Spanish": "es",
+            "French": "fr",
+            "German": "de",
+            "Japanese": "ja",
+            "Russian": "ru",
+            "Portuguese": "pt"
+        }
+        selected_language = st.selectbox(
+            "Select Video Language",
+            options=list(languages.keys()),
+            help="Choose the language of the YouTube video."
         )
+        language_code = languages[selected_language]
+
         
         # Reset Button
         if st.button("Clear Chat History"):
@@ -118,7 +133,7 @@ def main():
                     # st.session_state.current_video_id = None # Keep the ID but maybe allow retry
 
     elif not api_key:
-        st.info("👋 Hey! Please enter your OpenAI API Key in the sidebar to get started.")
+        st.info("👋 Hey! Please configure your OPENAI_API_KEY in the .env file to get started.")
 
     # Chat Interface
     if "messages" not in st.session_state:
