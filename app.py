@@ -7,6 +7,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -138,6 +139,10 @@ def main():
     # Header Section
     st.markdown('<h1 class="main-header">🎥 YouTube RAG Chatbot</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Chat with any YouTube video instantly using the power of AI</p>', unsafe_allow_html=True)
+    
+    # Initialize session state for messages if not exists
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
     # Sidebar configuration
     with st.sidebar:
@@ -237,10 +242,6 @@ def main():
 
     st.markdown("---")
 
-    # Chat Interface
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
     # Display Chat History
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -263,16 +264,29 @@ def main():
                         
                         llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
                         
+                        # Helper to format chat history
+                        def format_chat_history(messages):
+                            history = []
+                            for msg in messages:
+                                if msg["role"] == "user":
+                                    history.append(HumanMessage(content=msg["content"]))
+                                elif msg["role"] == "assistant":
+                                    history.append(AIMessage(content=msg["content"]))
+                            return history
+
                         template = """
                         You are a helpful and intelligent assistant.
                         Your primary source of information is the provided transcript context from a YouTube video.
                         
                         Instructions:
-                        1. Answer the question based on the Context provided below.
+                        1. Answer the question based on the Context provided below and the Chat History.
                         2. If the answer is NOT in the Context, you may use your general knowledge to answer, but you MUST mention that this information is not from the video.
                         3. Keep your language simple, clear, and easy to understand for a general audience.
                         4. Do not hallucinate. If you don't know the answer and it's not in the context or general knowledge, say you don't know.
                         5. be concise and to the point.
+                        
+                        Chat History:
+                        {chat_history}
                         
                         Context:
                         {context}
@@ -282,7 +296,7 @@ def main():
                         
                         prompt_template = PromptTemplate(
                             template=template,
-                            input_variables=['context', 'question']
+                            input_variables=['chat_history', 'context', 'question']
                         )
                         
                         # Retrieve and format context manually to display it
@@ -293,7 +307,11 @@ def main():
                             st.write(retrieved_docs)
 
                         chain = (
-                            {"context": lambda x: context_text, "question": RunnablePassthrough()}
+                            {
+                                "context": lambda x: context_text, 
+                                "question": RunnablePassthrough(),
+                                "chat_history": lambda x: format_chat_history(st.session_state.get("messages", [])[:-1])
+                            }
                             | prompt_template
                             | llm
                             | StrOutputParser()
