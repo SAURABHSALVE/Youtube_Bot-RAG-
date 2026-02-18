@@ -19,27 +19,104 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better aesthetics
+# Custom CSS for enhanced UI
 st.markdown("""
 <style>
+    /* Global Styles */
+    .stApp {
+        background-color: #0e1117;
+        color: #fafafa;
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Header Styling */
+    .main-header {
+        text-align: center;
+        padding: 2rem 0;
+        background: linear-gradient(90deg, #FF0000 0%, #2b313e 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 3rem;
+        font-weight: 800;
+    }
+    
+    .sub-header {
+        text-align: center;
+        color: #a0a0a0;
+        font-size: 1.2rem;
+        margin-bottom: 2rem;
+    }
+
+    /* Input Fields Styling */
     .stTextInput > div > div > input {
-        border-radius: 10px;
+        border-radius: 12px;
+        border: 1px solid #475063;
+        background-color: #262730;
+        color: #ffffff;
+        padding: 12px;
     }
+    
+    .stTextInput > div > div > input:focus {
+        border-color: #FF0000;
+        box-shadow: 0 0 0 1px #FF0000;
+    }
+
+    /* Button Styling */
     .stButton > button {
-        border-radius: 10px;
-        width: 100%;
+        border-radius: 12px;
+        background-color: #FF0000;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
     }
-    .chat-message {
-        padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 1rem; display: flex
+    
+    .stButton > button:hover {
+        background-color: #cc0000;
+        transform: translateY(-2px);
     }
-    .chat-message.user {
+
+    /* Chat Message Bubbles */
+    .chat-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .user-message {
         background-color: #2b313e;
+        padding: 1rem;
+        border-radius: 15px 15px 0 15px;
+        margin-bottom: 1rem;
+        border: 1px solid #3b4252;
     }
-    .chat-message.bot {
-        background-color: #475063;
+    
+    .assistant-message {
+        background-color: #1e2129;
+        padding: 1rem;
+        border-radius: 15px 15px 15px 0;
+        margin-bottom: 1rem;
+        border: 1px solid #2e3440;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    .stChatMessage {
-        background-color: rgba(0,0,0,0);
+
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #161920;
+        border-right: 1px solid #2e3440;
+    }
+    
+    .sidebar-header {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #FF0000;
+        margin-bottom: 1rem;
+    }
+    
+    /* Expander Styling */
+    .streamlit-expanderHeader {
+        background-color: #262730;
+        border-radius: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -58,17 +135,23 @@ def format_docs(docs):
 
 # Main Application
 def main():
-    st.title("🎥 YouTube Chatbot")
-    st.markdown("##### Chat with any YouTube video using RAG & LangChain")
+    # Header Section
+    st.markdown('<h1 class="main-header">🎥 YouTube RAG Chatbot</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">Chat with any YouTube video instantly using the power of AI</p>', unsafe_allow_html=True)
 
     # Sidebar configuration
     with st.sidebar:
-        st.header("⚙️ Configuration")
+        st.markdown('<div class="sidebar-header">⚙️ Configuration</div>', unsafe_allow_html=True)
         
-        # API Key Input
+        # API Key Check
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             st.error("⚠️ OPENAI_API_KEY not found in .env file.")
+            st.info("Please create a .env file with your API key to proceed.")
+        else:
+            st.success("✅ API Key Loaded")
+        
+        st.markdown("---")
         
         # Language Selection
         languages = {
@@ -81,23 +164,33 @@ def main():
             "Russian": "ru",
             "Portuguese": "pt"
         }
+        
         selected_language = st.selectbox(
             "Select Video Language",
             options=list(languages.keys()),
             help="Choose the language of the YouTube video."
         )
         language_code = languages[selected_language]
-
+        
+        st.markdown("---")
         
         # Reset Button
-        if st.button("Clear Chat History"):
+        if st.button("🗑️ Clear Chat History", use_container_width=True):
             st.session_state.messages = []
             st.session_state.vector_store = None
             st.session_state.current_video_id = None
             st.rerun()
+            
+        st.markdown("---")
+        with st.expander("ℹ️ How to use"):
+            st.markdown("""
+            1. Paste a YouTube URL in the input field.
+            2. Wait for the transcript to be processed.
+            3. Ask any question about the video's content!
+            """)
 
     # Main Content Area
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([4, 1])
     with col1:
         video_url = st.text_input("🔗 Enter YouTube Video URL", placeholder="https://www.youtube.com/watch?v=...")
     
@@ -107,33 +200,42 @@ def main():
         
         # Check if we need to process a new video
         if "current_video_id" not in st.session_state or st.session_state.current_video_id != video_id:
-            with st.spinner("🔄 Processing video transcript... This might take a moment."):
+            with st.status("🔄 Processing video...", expanded=True) as status:
                 try:
+                    st.write("📥 Fetching transcript...")
                     # 1. Fetch Transcript
                     transcript_list = YouTubeTranscriptApi().fetch(video_id, languages=[language_code]).to_raw_data()
                     transcript_text = " ".join([chunk["text"] for chunk in transcript_list])
                     
+                    st.write("✂️ Splitting text...")
                     # 2. Split Text
                     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
                     docs = splitter.create_documents([transcript_text])
                     
+                    st.write("🧠 Generating embeddings & vector store...")
                     # 3. Create Vector Store
                     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
                     st.session_state.vector_store = FAISS.from_documents(docs, embeddings)
                     st.session_state.current_video_id = video_id
                     st.session_state.messages = [] # Reset chat for new video
-                    st.success("✅ Video processed! You can now ask questions.")
+                    
+                    status.update(label="✅ Video processed successfully!", state="complete", expanded=False)
+                    st.toast("Ready to chat!", icon="🎉")
                     
                 except TranscriptsDisabled:
-                    st.error("❌ Transcripts are disabled for this video.")
+                    status.update(label="❌ Error", state="error")
+                    st.error("Transcripts are disabled for this video.")
                 except NoTranscriptFound:
-                    st.error(f"❌ No transcript found for language '{language_code}'.")
+                    status.update(label="❌ Error", state="error")
+                    st.error(f"No transcript found for language '{language_code}'.")
                 except Exception as e:
-                    st.error(f"❌ Error occurred: {str(e)}")
-                    # st.session_state.current_video_id = None # Keep the ID but maybe allow retry
+                    status.update(label="❌ Error", state="error")
+                    st.error(f"Error occurred: {str(e)}")
 
     elif not api_key:
         st.info("👋 Hey! Please configure your OPENAI_API_KEY in the .env file to get started.")
+
+    st.markdown("---")
 
     # Chat Interface
     if "messages" not in st.session_state:
@@ -183,14 +285,11 @@ def main():
                             input_variables=['context', 'question']
                         )
                         
-                        def format_docs(docs):
-                            return "\n\n".join(doc.page_content for doc in docs)
-
                         # Retrieve and format context manually to display it
                         retrieved_docs = retriever.invoke(prompt)
                         context_text = format_docs(retrieved_docs)
                         
-                        with st.expander("Debugging: Retrieved Context"):
+                        with st.expander("🔍 Debugging: Retrieved Context"):
                             st.write(retrieved_docs)
 
                         chain = (
